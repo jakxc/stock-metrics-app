@@ -9,7 +9,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const { signUp } = useAuth();
   const [formData, setFormData] = useState({
-    name: '',
+    username: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -30,12 +30,12 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      await signUp(formData.email, formData.password, formData.name);
+      await signUp(formData.email, formData.password, formData.username);
       // Redirect to home page after successful registration
       router.push('/');
     } catch (err: any) {
       // Firebase auth error handling
-      let errorMessage = 'An error occurred during registration';
+      let errorMessage = 'An error occurred during signing up.';
 
       switch (err.code) {
         case 'auth/email-already-in-use':
@@ -92,7 +92,7 @@ export default function RegisterPage() {
           <div className="space-y-4">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Full Name
+                Username
               </label>
               <input
                 id="name"
@@ -100,7 +100,7 @@ export default function RegisterPage() {
                 type="text"
                 autoComplete="name"
                 required
-                value={formData.name}
+                value={formData.username}
                 onChange={handleChange}
                 className="appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm dark:bg-gray-800"
                 placeholder="John Doe"
@@ -173,7 +173,7 @@ export default function RegisterPage() {
             <span className="text-sm text-gray-600 dark:text-gray-400">
               Already have an account?{' '}
               <Link href="/login" className="font-medium text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300">
-                Sign in
+                Login here
               </Link>
             </span>
           </div>
