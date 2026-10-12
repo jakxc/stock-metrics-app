@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
+import { shouldUseMockData, getEnvironmentConfig, isDevelopment } from '@/lib/environment';
 
 // Using Alpha Vantage API (free tier available)
 const API_KEY = process.env.ALPHA_VANTAGE_API_KEY || 'demo';
@@ -47,6 +48,36 @@ export async function GET(
 ) {
   const { symbol } = await params;
   const upperSymbol = symbol.toUpperCase();
+
+  const config = getEnvironmentConfig();
+
+  // In development or when forced, return mock data immediately
+  if (shouldUseMockData()) {
+    console.log(`[${config.environment.toUpperCase()}] Using mock data for ${upperSymbol}`);
+
+    if (MOCK_DATA[upperSymbol]) {
+      return NextResponse.json({
+        ...MOCK_DATA[upperSymbol],
+        mockData: true,
+        ...config,
+        message: isDevelopment()
+          ? 'Using mock data in development environment'
+          : 'Mock data forced via environment configuration',
+      });
+    }
+
+    return NextResponse.json(
+      {
+        error: `Mock data not available for symbol: ${upperSymbol}`,
+        availableSymbols: Object.keys(MOCK_DATA),
+        mockData: true,
+        ...config
+      },
+      { status: 404 }
+    );
+  }
+
+  console.log(`[${config.environment.toUpperCase()}] Fetching real data for ${upperSymbol} using API key: ${API_KEY === 'demo' ? 'DEMO' : 'CUSTOM'}`);
 
   try {
     // Fetch company overview for P/E ratio and EPS

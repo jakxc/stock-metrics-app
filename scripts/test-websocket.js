@@ -12,11 +12,11 @@ console.log(`🔗 Connecting to: ${WS_URL}`);
 const ws = new WebSocket(WS_URL);
 
 ws.on('open', () => {
-  console.log('✅ Connected to WebSocket server');
+  console.log('Connected to WebSocket server');
 
   // Subscribe to test symbols
   TEST_SYMBOLS.forEach(symbol => {
-    console.log(`📈 Subscribing to ${symbol}`);
+    console.log(`Subscribing to ${symbol}`);
     ws.send(JSON.stringify({
       type: 'subscribe',
       symbol: symbol
@@ -25,7 +25,7 @@ ws.on('open', () => {
 
   // Test for 30 seconds then disconnect
   setTimeout(() => {
-    console.log('\n⏰ Test completed, unsubscribing...');
+    console.log('Test completed, unsubscribing...');
 
     TEST_SYMBOLS.forEach(symbol => {
       ws.send(JSON.stringify({
@@ -51,7 +51,7 @@ ws.on('message', (data) => {
       console.log(`${direction} ${symbol}: $${price} (${changeStr})`);
     }
   } catch (error) {
-    console.error('❌ Error parsing message:', error);
+    console.error('Error parsing message:', error);
   }
 });
 
@@ -61,7 +61,7 @@ ws.on('close', () => {
 });
 
 ws.on('error', (error) => {
-  console.error('❌ WebSocket error:', error.message);
+  console.error('WebSocket error:', error.message);
   console.log('\n💡 Make sure the WebSocket server is running:');
   console.log('   npm run websocket');
   process.exit(1);
@@ -69,6 +69,6 @@ ws.on('error', (error) => {
 
 // Handle Ctrl+C
 process.on('SIGINT', () => {
-  console.log('\n🛑 Test interrupted, closing connection...');
+  console.log('Test interrupted, closing connection...');
   ws.close();
 });
