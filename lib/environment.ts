@@ -42,24 +42,37 @@ export function isTest(): boolean {
  * Check if mock data should be used
  */
 export function shouldUseMockData(): boolean {
-  return (
-    isDevelopment() ||
-    process.env.FORCE_MOCK_DATA === 'true' ||
-    process.env.USE_MOCK_DATA === 'true'
-  );
+  // Force mock data if explicitly set
+  if (process.env.FORCE_MOCK_DATA === 'true' || process.env.USE_MOCK_DATA === 'true') {
+    return true;
+  }
+
+  // Use real data in development if USE_REAL_API is set to true
+  if (isDevelopment() && process.env.USE_REAL_API === 'true') {
+    return false;
+  }
+
+  // Default to mock data in development (unless USE_REAL_API is true)
+  return isDevelopment();
 }
 
 /**
  * Get environment-specific configuration
  */
 export function getEnvironmentConfig() {
+  const useMockData = shouldUseMockData();
+  const hasValidApiKey = Boolean(process.env.ALPHA_VANTAGE_API_KEY && process.env.ALPHA_VANTAGE_API_KEY !== 'demo');
+
   return {
     environment: getCurrentEnvironment(),
     isDevelopment: isDevelopment(),
     isProduction: isProduction(),
     isTest: isTest(),
-    useMockData: shouldUseMockData(),
+    useMockData,
+    useRealApi: process.env.USE_REAL_API === 'true',
+    forceMockData: process.env.FORCE_MOCK_DATA === 'true',
     apiKey: process.env.ALPHA_VANTAGE_API_KEY,
-    hasValidApiKey: Boolean(process.env.ALPHA_VANTAGE_API_KEY && process.env.ALPHA_VANTAGE_API_KEY !== 'demo'),
+    hasValidApiKey,
+    canUseRealData: !useMockData && hasValidApiKey,
   };
 }

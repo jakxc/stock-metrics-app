@@ -5,9 +5,24 @@ import { shouldUseMockData, getEnvironmentConfig, isDevelopment } from '@/lib/en
 // Using Alpha Vantage API (free tier available)
 const API_KEY = process.env.ALPHA_VANTAGE_API_KEY || 'demo';
 const BASE_URL = 'https://www.alphavantage.co/query';
+const REQUEST_TIMEOUT_MS = 8000;
+
+interface StockData {
+  symbol: string;
+  companyName: string;
+  earningsPerShare: number | null;
+  dividendPerShare: number | null;
+  peRatio: number | null;
+  earningsGrowth: number | null;
+}
+
+interface AnnualEarning {
+  fiscalDateEnding: string;
+  reportedEPS: string;
+}
 
 // Mock data for common stocks when API is rate limited
-const MOCK_DATA: Record<string, any> = {
+const MOCK_DATA: Record<string, StockData> = {
   'AAPL': {
     symbol: 'AAPL',
     companyName: 'Apple Inc.',
@@ -41,6 +56,41 @@ const MOCK_DATA: Record<string, any> = {
     earningsGrowth: 7.48,
   },
 };
+
+// Alpha Vantage returns 200 OK with a Note/Information field instead of a real
+// HTTP error status when the key is rate limited or invalid.
+function isRateLimitedResponse(data: any): boolean {
+  return Boolean(data?.Note || data?.Information);
+}
+
+function mockResponse(upperSymbol: string, message: string) {
+  return NextResponse.json({
+    ...MOCK_DATA[upperSymbol],
+    mockData: true,
+    message,
+  });
+}
+
+// Most recent two complete fiscal years' EPS, sorted descending by date.
+function calculateEarningsGrowth(earnings: any): number | null {
+  if (isRateLimitedResponse(earnings)) return null;
+
+  const annualEarnings: AnnualEarning[] | undefined = earnings?.annualEarnings;
+  if (!annualEarnings || annualEarnings.length < 2) return null;
+
+  const sorted = [...annualEarnings].sort(
+    (a, b) => new Date(b.fiscalDateEnding).getTime() - new Date(a.fiscalDateEnding).getTime()
+  );
+
+  const currentYearEPS = parseFloat(sorted[0].reportedEPS);
+  const previousYearEPS = parseFloat(sorted[1].reportedEPS);
+
+  if (isNaN(currentYearEPS) || isNaN(previousYearEPS) || previousYearEPS === 0) {
+    return null;
+  }
+
+  return ((currentYearEPS - previousYearEPS) / Math.abs(previousYearEPS)) * 100;
+}
 
 export async function GET(
   _request: Request,
@@ -80,36 +130,38 @@ export async function GET(
   console.log(`[${config.environment.toUpperCase()}] Fetching real data for ${upperSymbol} using API key: ${API_KEY === 'demo' ? 'DEMO' : 'CUSTOM'}`);
 
   try {
-    // Fetch company overview for P/E ratio and EPS
-    const overviewResponse = await axios.get(BASE_URL, {
-      params: {
-        function: 'OVERVIEW',
-        symbol: upperSymbol,
-        apikey: API_KEY,
-      },
-    });
+    // Overview and earnings are independent — fetch in parallel instead of
+    // sequentially to roughly halve latency. allSettled (not all) so a
+    // failure on one call doesn't discard a successful result from the other.
+    const [overviewResult, earningsResult] = await Promise.allSettled([
+      axios.get(BASE_URL, {
+        params: { function: 'OVERVIEW', symbol: upperSymbol, apikey: API_KEY },
+        timeout: REQUEST_TIMEOUT_MS,
+      }),
+      axios.get(BASE_URL, {
+        params: { function: 'EARNINGS', symbol: upperSymbol, apikey: API_KEY },
+        timeout: REQUEST_TIMEOUT_MS,
+      }),
+    ]);
 
-    // Fetch earnings data for growth calculation
-    const earningsResponse = await axios.get(BASE_URL, {
-      params: {
-        function: 'EARNINGS',
-        symbol: upperSymbol,
-        apikey: API_KEY,
-      },
-    });
+    if (overviewResult.status === 'rejected') {
+      console.error('Error fetching stock overview:', overviewResult.reason?.message || overviewResult.reason);
 
-    const overview = overviewResponse.data;
-    const earnings = earningsResponse.data;
-
-    // Check if data is valid
-    if (overview.Note || overview.Information) {
-      // Check if we have mock data for this symbol
       if (MOCK_DATA[upperSymbol]) {
-        return NextResponse.json({
-          ...MOCK_DATA[upperSymbol],
-          mockData: true,
-          message: 'Using sample data due to API rate limit. Get a free API key at https://www.alphavantage.co/support/#api-key',
-        });
+        return mockResponse(upperSymbol, 'Using sample data due to an API error. Get a free API key at https://www.alphavantage.co/support/#api-key');
+      }
+
+      return NextResponse.json(
+        { error: 'Failed to fetch stock data' },
+        { status: 500 }
+      );
+    }
+
+    const overview = overviewResult.value.data;
+
+    if (isRateLimitedResponse(overview)) {
+      if (MOCK_DATA[upperSymbol]) {
+        return mockResponse(upperSymbol, 'Using sample data due to API rate limit. Get a free API key at https://www.alphavantage.co/support/#api-key');
       }
 
       return NextResponse.json(
@@ -125,35 +177,20 @@ export async function GET(
       );
     }
 
-    // Calculate earnings growth (current year vs previous year)
-    let earningsGrowth = null;
-
-    // Check if earnings data was rate limited
-    if (!earnings.Information && !earnings.Note && earnings.annualEarnings && earnings.annualEarnings.length > 0) {
-      // Find the most recent two complete years of earnings
-      // Sort by date descending to ensure we get the most recent years
-      const sortedEarnings = [...earnings.annualEarnings].sort((a: any, b: any) => {
-        return new Date(b.fiscalDateEnding).getTime() - new Date(a.fiscalDateEnding).getTime();
-      });
-
-      // Take the two most recent earnings entries
-      if (sortedEarnings.length >= 2) {
-        const currentYearEPS = parseFloat(sortedEarnings[0].reportedEPS);
-        const previousYearEPS = parseFloat(sortedEarnings[1].reportedEPS);
-
-        if (!isNaN(currentYearEPS) && !isNaN(previousYearEPS) && previousYearEPS !== 0) {
-          earningsGrowth = ((currentYearEPS - previousYearEPS) / Math.abs(previousYearEPS)) * 100;
-        }
-      }
+    // Earnings call is best-effort: if it failed or was rate limited, we
+    // still return the overview data with earningsGrowth as null.
+    const earnings = earningsResult.status === 'fulfilled' ? earningsResult.value.data : null;
+    if (earningsResult.status === 'rejected') {
+      console.warn('Error fetching earnings data:', earningsResult.reason?.message || earningsResult.reason);
     }
 
-    const stockData = {
+    const stockData: StockData = {
       symbol: overview.Symbol,
       companyName: overview.Name,
       earningsPerShare: overview.EPS ? parseFloat(overview.EPS) : null,
       dividendPerShare: overview.DividendPerShare ? parseFloat(overview.DividendPerShare) : null,
       peRatio: overview.PERatio && overview.PERatio !== 'None' ? parseFloat(overview.PERatio) : null,
-      earningsGrowth: earningsGrowth,
+      earningsGrowth: calculateEarningsGrowth(earnings),
     };
 
     return NextResponse.json(stockData);

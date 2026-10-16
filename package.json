@@ -11,8 +11,10 @@
     "dev:all": "concurrently \"npm run websocket\" \"npm run dev\"",
     "test:websocket": "node scripts/test-websocket.js",
     "test:env": "node scripts/test-environment-config.js",
+    "test:api-config": "node scripts/test-api-config.js",
+    "test:real-api": "node scripts/test-real-api.js",
     "dev:mock": "NODE_ENV=development FORCE_MOCK_DATA=true npm run dev",
-    "dev:real": "NODE_ENV=development FORCE_MOCK_DATA=false npm run dev",
+    "dev:real": "NODE_ENV=development USE_REAL_API=true FORCE_MOCK_DATA=false npm run dev",
     "build:prod": "NODE_ENV=production npm run build"
   },
   "dependencies": {

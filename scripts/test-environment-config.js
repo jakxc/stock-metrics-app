@@ -74,8 +74,8 @@ async function testEnvironmentConfig() {
     console.log('');
   }
 
-  console.log('✅ Environment configuration test completed!');
-  console.log('\n📚 Summary:');
+  console.log('Environment configuration test completed!');
+  console.log('\nSummary:');
   console.log('   • Development: Always uses mock data');
   console.log('   • Production: Uses real API (unless FORCE_MOCK_DATA=true)');
   console.log('   • Test: Uses mock data');
