@@ -94,7 +94,7 @@ export default function StockSearch() {
       dividendPerShare: 0.96,
       peRatio: 28.5,
       earningsGrowth: 12.4,
-      savedAt: { toDate: () => new Date('2024-01-15T10:30:00') } as any,
+      savedAt: Timestamp.fromDate(new Date('2024-01-15T10:30:00')),
     },
     {
       id: 'mock-2',
@@ -104,7 +104,7 @@ export default function StockSearch() {
       dividendPerShare: null,
       peRatio: 24.1,
       earningsGrowth: -2.3,
-      savedAt: { toDate: () => new Date('2024-01-14T09:00:00') } as any,
+      savedAt: Timestamp.fromDate(new Date('2024-01-14T09:00:00')),
     },
   ];
 
@@ -335,7 +335,7 @@ export default function StockSearch() {
           dividendPerShare: stockData.dividendPerShare,
           peRatio: stockData.peRatio,
           earningsGrowth: stockData.earningsGrowth,
-          savedAt: { toDate: () => new Date() } as any,
+          savedAt: Timestamp.fromDate(new Date()),
         },
         ...prev,
       ]);

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { FirebaseError } from 'firebase/app';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function RegisterPage() {
@@ -17,7 +18,7 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.SubmitEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
 
@@ -33,25 +34,29 @@ export default function RegisterPage() {
       await signUp(formData.email, formData.password, formData.username);
       // Redirect to home page after successful registration
       router.push('/');
-    } catch (err: any) {
+    } catch (err) {
       // Firebase auth error handling
       let errorMessage = 'An error occurred during signing up.';
 
-      switch (err.code) {
-        case 'auth/email-already-in-use':
-          errorMessage = 'This email address is already registered';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email address';
-          break;
-        case 'auth/weak-password':
-          errorMessage = 'Password should be at least 6 characters';
-          break;
-        case 'auth/operation-not-allowed':
-          errorMessage = 'Email/password accounts are not enabled';
-          break;
-        default:
-          errorMessage = err.message || errorMessage;
+      if (err instanceof FirebaseError) {
+        switch (err.code) {
+          case 'auth/email-already-in-use':
+            errorMessage = 'This email address is already registered';
+            break;
+          case 'auth/invalid-email':
+            errorMessage = 'Invalid email address';
+            break;
+          case 'auth/weak-password':
+            errorMessage = 'Password should be at least 6 characters';
+            break;
+          case 'auth/operation-not-allowed':
+            errorMessage = 'Email/password accounts are not enabled';
+            break;
+          default:
+            errorMessage = err.message || errorMessage;
+        }
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
       }
 
       setError(errorMessage);
@@ -96,7 +101,7 @@ export default function RegisterPage() {
               </label>
               <input
                 id="name"
-                name="name"
+                name="username"
                 type="text"
                 autoComplete="name"
                 required

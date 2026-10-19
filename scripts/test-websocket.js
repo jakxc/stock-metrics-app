@@ -44,7 +44,7 @@ ws.on('message', (data) => {
   try {
     const message = JSON.parse(data.toString());
     if (message.type === 'price_update') {
-      const { symbol, price, change, changePct } = message;
+      const { symbol, price, changePct } = message;
       const direction = changePct >= 0 ? '🟢' : '🔴';
       const changeStr = changePct >= 0 ? `+${changePct}%` : `${changePct}%`;
 

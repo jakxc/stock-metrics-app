@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server';
-import axios from 'axios';
+import YahooFinance from 'yahoo-finance2';
 import { shouldUseMockData, getEnvironmentConfig, isDevelopment } from '@/lib/environment';
 
-// Using Alpha Vantage API (free tier available)
-const API_KEY = process.env.ALPHA_VANTAGE_API_KEY || 'demo';
-const BASE_URL = 'https://www.alphavantage.co/query';
-const REQUEST_TIMEOUT_MS = 8000;
+// Suppress the one-time stdout survey notice yahoo-finance2 prints on first use.
+const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
 interface StockData {
   symbol: string;
@@ -16,12 +14,7 @@ interface StockData {
   earningsGrowth: number | null;
 }
 
-interface AnnualEarning {
-  fiscalDateEnding: string;
-  reportedEPS: string;
-}
-
-// Mock data for common stocks when API is rate limited
+// Mock data for common stocks when the Yahoo Finance lookup fails
 const MOCK_DATA: Record<string, StockData> = {
   'AAPL': {
     symbol: 'AAPL',
@@ -57,12 +50,6 @@ const MOCK_DATA: Record<string, StockData> = {
   },
 };
 
-// Alpha Vantage returns 200 OK with a Note/Information field instead of a real
-// HTTP error status when the key is rate limited or invalid.
-function isRateLimitedResponse(data: any): boolean {
-  return Boolean(data?.Note || data?.Information);
-}
-
 function mockResponse(upperSymbol: string, message: string) {
   return NextResponse.json({
     ...MOCK_DATA[upperSymbol],
@@ -71,21 +58,29 @@ function mockResponse(upperSymbol: string, message: string) {
   });
 }
 
-// Most recent two complete fiscal years' EPS, sorted descending by date.
-function calculateEarningsGrowth(earnings: any): number | null {
-  if (isRateLimitedResponse(earnings)) return null;
+// Trailing YoY EPS growth: most recent two complete fiscal years' actual
+// diluted EPS, from fundamentalsTimeSeries' annual `financials` module.
+// Actual-vs-actual (not an analyst estimate) — same convention as the
+// previous Alpha Vantage-based calculation.
+function calculateEarningsGrowth(
+  annualFinancials: { date: Date; dilutedEPS?: number | null }[] | undefined
+): number | null {
+  if (!annualFinancials || annualFinancials.length < 2) return null;
 
-  const annualEarnings: AnnualEarning[] | undefined = earnings?.annualEarnings;
-  if (!annualEarnings || annualEarnings.length < 2) return null;
-
-  const sorted = [...annualEarnings].sort(
-    (a, b) => new Date(b.fiscalDateEnding).getTime() - new Date(a.fiscalDateEnding).getTime()
+  const sorted = [...annualFinancials].sort(
+    (a, b) => b.date.getTime() - a.date.getTime()
   );
 
-  const currentYearEPS = parseFloat(sorted[0].reportedEPS);
-  const previousYearEPS = parseFloat(sorted[1].reportedEPS);
+  const currentYearEPS = sorted[0].dilutedEPS;
+  const previousYearEPS = sorted[1].dilutedEPS;
 
-  if (isNaN(currentYearEPS) || isNaN(previousYearEPS) || previousYearEPS === 0) {
+  if (
+    currentYearEPS == null ||
+    previousYearEPS == null ||
+    isNaN(currentYearEPS) ||
+    isNaN(previousYearEPS) ||
+    previousYearEPS === 0
+  ) {
     return null;
   }
 
@@ -127,75 +122,77 @@ export async function GET(
     );
   }
 
-  console.log(`[${config.environment.toUpperCase()}] Fetching real data for ${upperSymbol} using API key: ${API_KEY === 'demo' ? 'DEMO' : 'CUSTOM'}`);
+  console.log(`[${config.environment.toUpperCase()}] Fetching real data for ${upperSymbol} via Yahoo Finance`);
 
   try {
-    // Overview and earnings are independent — fetch in parallel instead of
-    // sequentially to roughly halve latency. allSettled (not all) so a
-    // failure on one call doesn't discard a successful result from the other.
-    const [overviewResult, earningsResult] = await Promise.allSettled([
-      axios.get(BASE_URL, {
-        params: { function: 'OVERVIEW', symbol: upperSymbol, apikey: API_KEY },
-        timeout: REQUEST_TIMEOUT_MS,
-      }),
-      axios.get(BASE_URL, {
-        params: { function: 'EARNINGS', symbol: upperSymbol, apikey: API_KEY },
-        timeout: REQUEST_TIMEOUT_MS,
-      }),
-    ]);
+    const result = await yahooFinance.quoteSummary(upperSymbol, {
+      modules: ['price', 'defaultKeyStatistics', 'summaryDetail'],
+    });
 
-    if (overviewResult.status === 'rejected') {
-      console.error('Error fetching stock overview:', overviewResult.reason?.message || overviewResult.reason);
+    const companyName = result.price?.longName || result.price?.shortName;
 
+    if (!companyName) {
       if (MOCK_DATA[upperSymbol]) {
-        return mockResponse(upperSymbol, 'Using sample data due to an API error. Get a free API key at https://www.alphavantage.co/support/#api-key');
+        return mockResponse(upperSymbol, 'Using sample data — this symbol was not found on Yahoo Finance.');
       }
 
-      return NextResponse.json(
-        { error: 'Failed to fetch stock data' },
-        { status: 500 }
-      );
-    }
-
-    const overview = overviewResult.value.data;
-
-    if (isRateLimitedResponse(overview)) {
-      if (MOCK_DATA[upperSymbol]) {
-        return mockResponse(upperSymbol, 'Using sample data due to API rate limit. Get a free API key at https://www.alphavantage.co/support/#api-key');
-      }
-
-      return NextResponse.json(
-        { error: 'API rate limit reached. Please try again later or use your own API key.' },
-        { status: 429 }
-      );
-    }
-
-    if (!overview.Symbol) {
       return NextResponse.json(
         { error: 'Stock symbol not found' },
         { status: 404 }
       );
     }
 
-    // Earnings call is best-effort: if it failed or was rate limited, we
-    // still return the overview data with earningsGrowth as null.
-    const earnings = earningsResult.status === 'fulfilled' ? earningsResult.value.data : null;
-    if (earningsResult.status === 'rejected') {
-      console.warn('Error fetching earnings data:', earningsResult.reason?.message || earningsResult.reason);
+    const earningsPerShare = result.defaultKeyStatistics?.trailingEps ?? null;
+    const dividendPerShare = result.summaryDetail?.dividendRate ?? null;
+    const peRatio = result.summaryDetail?.trailingPE ?? null;
+
+    // Annual EPS history is a separate, best-effort call: if it fails we
+    // still return the rest of the stock data with earningsGrowth as null.
+    let earningsGrowth: number | null = null;
+    try {
+      const annualFinancials = await yahooFinance.fundamentalsTimeSeries(upperSymbol, {
+        period1: '2018-01-01',
+        module: 'financials',
+        type: 'annual',
+      });
+      earningsGrowth = calculateEarningsGrowth(annualFinancials);
+    } catch (growthError) {
+      const message = growthError instanceof Error ? growthError.message : String(growthError);
+      console.warn('Error fetching annual EPS history:', message);
     }
 
     const stockData: StockData = {
-      symbol: overview.Symbol,
-      companyName: overview.Name,
-      earningsPerShare: overview.EPS ? parseFloat(overview.EPS) : null,
-      dividendPerShare: overview.DividendPerShare ? parseFloat(overview.DividendPerShare) : null,
-      peRatio: overview.PERatio && overview.PERatio !== 'None' ? parseFloat(overview.PERatio) : null,
-      earningsGrowth: calculateEarningsGrowth(earnings),
+      symbol: upperSymbol,
+      companyName,
+      earningsPerShare,
+      dividendPerShare,
+      peRatio,
+      earningsGrowth,
     };
 
     return NextResponse.json(stockData);
   } catch (error) {
-    console.error('Error fetching stock data:', error);
+    // yahoo-finance2 throws on an unknown symbol as well as on network/HTTP errors.
+    const message = error instanceof Error ? error.message : String(error);
+    const isUnknownSymbol = /not found|No data found|Quote not found/i.test(message);
+
+    if (isUnknownSymbol) {
+      if (MOCK_DATA[upperSymbol]) {
+        return mockResponse(upperSymbol, 'Using sample data — this symbol was not found on Yahoo Finance.');
+      }
+
+      return NextResponse.json(
+        { error: 'Stock symbol not found' },
+        { status: 404 }
+      );
+    }
+
+    console.error('Error fetching stock data from Yahoo Finance:', message);
+
+    if (MOCK_DATA[upperSymbol]) {
+      return mockResponse(upperSymbol, 'Using sample data due to an API error.');
+    }
+
     return NextResponse.json(
       { error: 'Failed to fetch stock data' },
       { status: 500 }

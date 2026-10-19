@@ -9,11 +9,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env.local') });
 
 // Import the environment configuration
-const {
-  getCurrentEnvironment,
-  shouldUseMockData,
-  getEnvironmentConfig
-} = require('../lib/environment.ts');
+const { getEnvironmentConfig } = require('../lib/environment.ts');
 
 function testApiConfiguration() {
   console.log('Testing API Configuration\n');

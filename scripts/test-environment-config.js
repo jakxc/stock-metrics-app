@@ -47,10 +47,7 @@ async function testEnvironmentConfig() {
         isDevelopment,
         isProduction,
         shouldUseMockData,
-        getEnvironmentConfig
       } = require('../lib/environment.ts');
-
-      const config = getEnvironmentConfig();
 
       console.log(`   Environment: ${getCurrentEnvironment()}`);
       console.log(`   Is Development: ${isDevelopment()}`);
