@@ -13,6 +13,16 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // lib/*.js and scripts/*.js are plain Node CommonJS, run directly via
+  // `node` (see package.json scripts) rather than bundled/transpiled — they
+  // genuinely need `require()`, so the TS-oriented ESM import rule doesn't
+  // apply to them.
+  {
+    files: ["lib/**/*.js", "scripts/**/*.js"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

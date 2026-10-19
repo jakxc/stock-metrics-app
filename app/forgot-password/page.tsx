@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { FirebaseError } from 'firebase/app';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function ForgotPasswordPage() {
@@ -20,22 +21,26 @@ export default function ForgotPasswordPage() {
     try {
       await resetPassword(email);
       setMessage('Check your email for password reset instructions');
-    } catch (err: any) {
+    } catch (err) {
       // Firebase auth error handling
       let errorMessage = 'Failed to reset password';
 
-      switch (err.code) {
-        case 'auth/user-not-found':
-          errorMessage = 'No user found with this email address';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email address';
-          break;
-        case 'auth/too-many-requests':
-          errorMessage = 'Too many requests. Please try again later';
-          break;
-        default:
-          errorMessage = err.message || errorMessage;
+      if (err instanceof FirebaseError) {
+        switch (err.code) {
+          case 'auth/user-not-found':
+            errorMessage = 'No user found with this email address';
+            break;
+          case 'auth/invalid-email':
+            errorMessage = 'Invalid email address';
+            break;
+          case 'auth/too-many-requests':
+            errorMessage = 'Too many requests. Please try again later';
+            break;
+          default:
+            errorMessage = err.message || errorMessage;
+        }
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
       }
 
       setError(errorMessage);
@@ -52,7 +57,7 @@ export default function ForgotPasswordPage() {
             Reset your password
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            Enter your email address and we'll send you a link to reset your password.
+            Enter your email address and we&apos;ll send you a link to reset your password.
           </p>
         </div>
 

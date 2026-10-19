@@ -15,7 +15,7 @@ import { auth } from '@/lib/firebase';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  signUp: (email: string, password: string, displayName: string) => Promise<void>;
+  signUp: (email: string, password: string, username: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -45,46 +45,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const signUp = async (email: string, password: string, displayName: string) => {
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
-      // Update the user profile with display name
-      if (userCredential.user) {
-        await updateProfile(userCredential.user, {
-          displayName: displayName,
-        });
+    // Update the user profile with display name
+    if (userCredential.user) {
+      await updateProfile(userCredential.user, {
+        displayName: displayName,
+      });
 
-        // Force refresh the user to get updated profile
-        await userCredential.user.reload();
-        setUser(auth.currentUser);
-      }
-    } catch (error: any) {
-      throw error;
+      // Force refresh the user to get updated profile
+      await userCredential.user.reload();
+      setUser(auth.currentUser);
     }
   };
 
   const signIn = async (email: string, password: string) => {
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (error: any) {
-      throw error;
-    }
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
   const logout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error: any) {
-      throw error;
-    }
+    await signOut(auth);
   };
 
   const resetPassword = async (email: string) => {
-    try {
-      await sendPasswordResetEmail(auth, email);
-    } catch (error: any) {
-      throw error;
-    }
+    await sendPasswordResetEmail(auth, email);
   };
 
   const value = {
