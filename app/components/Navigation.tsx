@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,10 +8,12 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function Navigation() {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const [isOpen, setIsOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
       await logout();
+      setIsOpen(false);
       router.push('/');
     } catch (error) {
       console.error('Failed to log out', error);
@@ -29,22 +32,50 @@ export default function Navigation() {
 
           <div className="flex items-center space-x-4">
             {user ? (
-              <>
-                <span className="text-sm text-gray-700 dark:text-gray-300">
-                  Welcome
-                  {user.displayName && (
-                    <>
-                      , <span className="font-bold">{user.displayName}</span>
-                    </>
-                  )}
-                </span>
+              <div className="relative">
+                {/* Dropdown Trigger Button */}
                 <button
-                  onClick={handleLogout}
-                  className="text-sm text-red-500 hover:text-red-700 dark:hover:text-red-400 px-4 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  onClick={() => setIsOpen(!isOpen)}
+                  className="flex items-center space-x-1 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-3 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
                 >
-                  Logout
+                  <span>
+                    Welcome
+                    {user.displayName ? (
+                      <>
+                        , <span className="font-bold">{user.displayName}</span>
+                      </>
+                    ) : (
+                      ' Back'
+                    )}
+                  </span>
+                  {/* Small Arrow Icon */}
+                  <svg
+                    className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
                 </button>
-              </>
+
+                {/* Dropdown Menu Overlay & Card */}
+                {isOpen && (
+                  <>
+                    {/* Invisible backdrop to close the dropdown when clicking outside */}
+                    <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+                    
+                    <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-20">
+                      <button
+                        onClick={handleLogout}
+                        className="w-full text-left text-sm text-red-500 hover:text-red-700 dark:hover:text-red-400 px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      >
+                        Logout
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             ) : (
               <>
                 <Link
