@@ -31,11 +31,16 @@ export default function Navigation() {
             {user ? (
               <>
                 <span className="text-sm text-gray-700 dark:text-gray-300">
-                  Welcome{user.displayName ? `, ${user.displayName}` : ''}
+                  Welcome
+                  {user.displayName && (
+                    <>
+                      , <span className="font-bold">{user.displayName}</span>
+                    </>
+                  )}
                 </span>
                 <button
                   onClick={handleLogout}
-                  className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-3 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  className="text-sm text-red-500 hover:text-red-700 dark:hover:text-red-400 px-4 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
                   Logout
                 </button>
@@ -44,7 +49,7 @@ export default function Navigation() {
               <>
                 <Link
                   href="/login"
-                  className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-3 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-4 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
                   Login
                 </Link>
