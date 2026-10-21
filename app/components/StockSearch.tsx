@@ -58,7 +58,6 @@ interface WebhookPayload {
   changePct: number;
 }
 
-const WS_URL = process.env.NEXT_PUBLIC_STOCK_WS_URL ?? 'wss://your-price-feed.example.com';
 const RECONNECT_DELAY_MS = 3000;
 const FLASH_DURATION_MS = 1200;
 
@@ -178,47 +177,80 @@ export default function StockSearch() {
   }, []);
 
   // ── Connect WebSocket (production) ───────────────────────────────────────────
-  const connectWs = useCallback(() => {
-    if (isDev) return;
-    if (wsRef.current) {
-      wsRef.current.onopen = null;
-      wsRef.current.onmessage = null;
-      wsRef.current.onclose = null;
-      wsRef.current.onerror = null;
-      wsRef.current.close();
-    }
+const connectWs = useCallback(() => {
+  if (isDev) return;
 
-    setWsStatus('connecting');
-    const ws = new WebSocket(WS_URL);
-    wsRef.current = ws;
+  const apiKey = process.env.NEXT_PUBLIC_FINNHUB_API_KEY;
+  if (!apiKey) {
+    console.warn('NEXT_PUBLIC_FINNHUB_API_KEY not set — WebSocket disabled');
+    setWsStatus('disconnected');
+    return;
+  }
 
-    ws.onopen = () => {
-      setWsStatus('connected');
-      // Re-subscribe to all symbols we were tracking
-      subscribedSymbolsRef.current.forEach((symbol) => {
-        wsSend({ type: 'subscribe', symbol });
-      });
-    };
+  if (wsRef.current) {
+    wsRef.current.onopen = null;
+    wsRef.current.onmessage = null;
+    wsRef.current.onclose = null;
+    wsRef.current.onerror = null;
+    wsRef.current.close();
+  }
 
-    ws.onmessage = (event) => {
-      try {
-        const payload: WebhookPayload = JSON.parse(event.data);
-        if (payload.type === 'price_update') applyPriceUpdate(payload);
-      } catch {
-        // Ignore malformed messages
+  setWsStatus('connecting');
+  const ws = new WebSocket(`wss://ws.finnhub.io?token=${apiKey}`);
+  wsRef.current = ws;
+
+  ws.onopen = () => {
+    setWsStatus('connected');
+    // Re-subscribe to all tracked symbols
+    subscribedSymbolsRef.current.forEach((symbol) => {
+      ws.send(JSON.stringify({ type: 'subscribe', symbol }));
+    });
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+
+      // Finnhub sends: { type: 'trade', data: [{ s: 'AAPL', p: 182.5, t: 1234567890, v: 100 }] }
+      if (msg.type === 'trade' && msg.data?.length) {
+        msg.data.forEach((trade: { s: string; p: number }) => {
+          const symbol = trade.s;
+          const price = parseFloat(trade.p.toFixed(2));
+
+          setLivePrices((prev) => {
+            const prevPrice = prev[symbol]?.price ?? price;
+            const change = parseFloat((price - prevPrice).toFixed(2));
+            const changePct = prevPrice !== 0
+              ? parseFloat(((change / prevPrice) * 100).toFixed(2))
+              : 0;
+            const direction: LivePrice['direction'] =
+              changePct > 0 ? 'up' : changePct < 0 ? 'down' : 'flat';
+
+            if (direction !== 'flat') triggerFlash(symbol, direction);
+
+            return {
+              ...prev,
+              [symbol]: { price, change, changePct, direction },
+            };
+          });
+        });
       }
-    };
+    } catch {
+      // Ignore malformed messages
+    }
+  };
 
-    ws.onclose = () => {
-      setWsStatus('disconnected');
-      // Auto-reconnect after delay
-      reconnectTimerRef.current = setTimeout(connectWs, RECONNECT_DELAY_MS);
-    };
+  ws.onclose = () => {
+    setWsStatus('disconnected');
+    // Clear any existing reconnect timer before setting a new one
+    if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    reconnectTimerRef.current = setTimeout(connectWs, RECONNECT_DELAY_MS);
+  };
 
-    ws.onerror = () => {
-      ws.close();
-    };
-  }, [isDev, applyPriceUpdate, wsSend]);
+  ws.onerror = () => {
+    ws.close();
+  };
+}, [isDev, triggerFlash]);
 
   // ── Start WebSocket on mount (production only) ───────────────────────────────
   useEffect(() => {
@@ -479,21 +511,23 @@ export default function StockSearch() {
 
       {/* ── Search form ── */}
       <form onSubmit={searchStock} className="mb-8">
-        <div className="flex gap-4">
+        <div className="flex flex-col gap-4">
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Enter stock symbol (e.g., AAPL, GOOGL)"
-            className="flex-1 px-4 py-2 border border-zinc-400 rounded-sm focus:outline-none focus:ring-2 focus:ring-sky-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+            className="flex-1 p-4 border border-zinc-400 rounded-sm focus:outline-none focus:ring-2 focus:ring-sky-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
           />
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-6 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading ? 'Searching...' : 'Search'}
-          </button>
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-8 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {loading ? 'Searching...' : 'Search'}
+            </button>
+          </div>
         </div>
       </form>
 

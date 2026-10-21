@@ -177,10 +177,6 @@ export async function GET(
     const isUnknownSymbol = /not found|No data found|Quote not found/i.test(message);
 
     if (isUnknownSymbol) {
-      if (MOCK_DATA[upperSymbol]) {
-        return mockResponse(upperSymbol, 'Using sample data — this symbol was not found on Yahoo Finance.');
-      }
-
       return NextResponse.json(
         { error: 'Stock symbol not found' },
         { status: 404 }

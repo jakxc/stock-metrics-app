@@ -8,17 +8,17 @@ export default function Home() {
           <h1 className="text-4xl font-bold text-zinc-900 dark:text-white mb-4">
             Stocks Financial Data
           </h1>
-          <p className="text-xl text-zinc-600 dark:text-zinc-300">
-            Search for any US stock to view its key financial metrics
-          </p>
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-xl text-zinc-600 dark:text-zinc-300">
+              Search for any US stock to view its key financial metrics
+            </p>
+            <p className="text-zinc-600 dark:text-zinc-400">
+              Data includes: Earnings Per Share (EPS), Dividend Per Share,
+              Price-to-Earnings (P/E) Ratio, and Year-over-Year Earnings Growth
+            </p>
+          </div>
         </div>
         <StockSearch />
-        <div className="mt-12 text-center text-md text-zinc-600 dark:text-zinc-500">
-          <p>
-            Data includes: Earnings Per Share (EPS), Dividend Per Share,
-            Price-to-Earnings (P/E) Ratio, and Year-over-Year Earnings Growth
-          </p>
-        </div>
       </main>
     </div>
   );

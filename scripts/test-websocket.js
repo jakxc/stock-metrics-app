@@ -6,8 +6,8 @@ const WebSocket = require('ws');
 const WS_URL = process.env.NEXT_PUBLIC_STOCK_WS_URL || 'ws://localhost:8080';
 const TEST_SYMBOLS = ['AAPL', 'GOOGL', 'MSFT'];
 
-console.log('🧪 Testing WebSocket Connection...');
-console.log(`🔗 Connecting to: ${WS_URL}`);
+console.log('Testing WebSocket Connection...');
+console.log(`Connecting to: ${WS_URL}`);
 
 const ws = new WebSocket(WS_URL);
 
